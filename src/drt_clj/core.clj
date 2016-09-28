@@ -1,7 +1,7 @@
 (ns drt-clj.core
   (:gen-class))
 
-(def flight {:code "BA0001" :pax 100})
+(def flight {:code "BA0001" :pax 90})
 
 (def paxDisRate 25)
 
@@ -18,30 +18,72 @@
                   {:paxType "enmr" :queue "eea-desk" :ratio 0.2}
                   ])
 
+(def procTimes
+  {
+    "emr" {"eea-desk" 0.25 "e-gate" 0.2}
+    "enmr" {"eea-desk" 0.75}
+    "visa" {"non-eea-desk" 0.5 "fast-track" 0.25}
+    "non-visa" {"non-eea-desk" 0.8 "fast-track" 0.3}
+    }
+  )
+
+(get (get procTimes "emr") "e-gate")
+
+(defn paxProcTime
+  [paxType queue]
+  (get (get procTimes paxType) queue)
+  )
+
 (defn splitPax
   [pax-queue-splits pax-mins]
   (map (fn [pax]
          (into []
                (map (fn [split]
-                      {:paxType (:paxType split) :queue (:queue split) :ratio (* (:ratio split) pax)})
+                      {:paxType (:paxType split) :queue (:queue split) :pax (* (:ratio split) pax)})
                     pax-queue-splits)))
        pax-mins))
 
 
+(into (repeat 3 20) [5])
 
-(def paxLoads (splitPax splitRatios (paxByMinute (flight :pax) paxDisRate)))
+(paxByMinute 90 25)
 
-paxLoads
+(def myPaxLoads (splitPax splitRatios (paxByMinute (flight :pax) paxDisRate)))
 
-(reduce (fn [queue-paxloads {queue :queue pax :pax}]
-          (assoc queue-paxloads queue (+ (or (queue-paxloads :queue) 0) pax)))
+myPaxLoads
+
+(defn workload
+  [paxLoads]
+  (map
+    (fn [splits]
+      (reduce
+        (fn [a {paxType :paxType queue :queue pax :pax}]
+          (assoc a queue (+ (or (get a queue) 0) (* (paxProcTime paxType queue) pax)))
+          )
         {}
-        paxLoads)
+        splits
+        )
+      )
+    myPaxLoads
+    )
+  )
 
-(reduce (fn [queue-paxloads thing]
-          (println thing))
+(defn paxload
+  [paxLoads]
+  (map
+    (fn [splits]
+      (reduce
+        (fn [a {paxType :paxType queue :queue pax :pax}]
+          (assoc a queue (+ (or (get a queue) 0) pax))
+          )
         {}
-        paxLoads)
+        splits
+        )
+      )
+    myPaxLoads
+    )
+  )
 
-(+ 5 (or ({:ye 1} :yeah) 0))
+(paxload paxLoads)
 
+(workload paxLoads)
