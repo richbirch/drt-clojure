@@ -13,26 +13,21 @@
       (into [] [pax]))))
 
 (def splitRatios [
-                  {:paxType "emr" :queue "eea-desk" :ratio 0.6}
-                  {:paxType "emr" :queue "e-gate" :ratio 0.2}
-                  {:paxType "enmr" :queue "eea-desk" :ratio 0.2}
-                  ])
+                   {:paxType :eea-mr :queue :eea-desk :ratio 0.6}
+                   {:paxType :eea-mr :queue :e-gate :ratio 0.2}
+                   {:paxType :eea-nmr :queue :eea-desk :ratio 0.2}
+                   ])
 
 (def procTimes
   {
-    "emr" {"eea-desk" 0.25 "e-gate" 0.2}
-    "enmr" {"eea-desk" 0.75}
-    "visa" {"non-eea-desk" 0.5 "fast-track" 0.25}
-    "non-visa" {"non-eea-desk" 0.8 "fast-track" 0.3}
-    }
-  )
-
-(get (get procTimes "emr") "e-gate")
+    :eea-mr {:eea-desk 0.25 :e-gate 0.2}
+    :eea-nmr {:eea-desk 0.75}
+    :visa {:non-eea-desk 0.5 :fast-track 0.25}
+    :non-visa {:non-eea-desk 0.8 :fast-track 0.3}})
 
 (defn paxProcTime
   [paxType queue]
-  (get (get procTimes paxType) queue)
-  )
+  (get (get procTimes paxType) queue))
 
 (defn splitPax
   [pax-queue-splits pax-mins]
@@ -44,46 +39,31 @@
        pax-mins))
 
 
-(into (repeat 3 20) [5])
-
-(paxByMinute 90 25)
 
 (def myPaxLoads (splitPax splitRatios (paxByMinute (flight :pax) paxDisRate)))
 
 myPaxLoads
 
-(defn workload
-  [paxLoads]
+(defn wlplimpl
+  [paxLoads f]
   (map
     (fn [splits]
       (reduce
         (fn [a {paxType :paxType queue :queue pax :pax}]
-          (assoc a queue (+ (or (get a queue) 0) (* (paxProcTime paxType queue) pax)))
-          )
+          (assoc a queue (+ (or (get a queue) 0) (f paxType queue pax))))
         {}
-        splits
-        )
-      )
-    myPaxLoads
-    )
-  )
+        splits))
+    paxLoads))
+
+(defn workload
+  [paxLoads]
+  (wlplimpl paxLoads #(* (paxProcTime %1 %2) %3)))
+
 
 (defn paxload
   [paxLoads]
-  (map
-    (fn [splits]
-      (reduce
-        (fn [a {paxType :paxType queue :queue pax :pax}]
-          (assoc a queue (+ (or (get a queue) 0) pax))
-          )
-        {}
-        splits
-        )
-      )
-    myPaxLoads
-    )
-  )
+  (wlplimpl paxLoads #(identity %)))
 
-(paxload paxLoads)
+(paxload myPaxLoads)
 
-(workload paxLoads)
+(workload myPaxLoads)
