@@ -1,16 +1,29 @@
 (ns drt-clj.core
   (:gen-class))
 
-(def flight {:code "BA0001" :pax 90})
+(require '[clj-time.core :as t])
+(require '[clj-time.format :as f])
+
+(def flight {:code "BA0001" :scheduled "2016-10-31T07:20:05.000Z" :pax 90})
 
 (def paxDisRate 25)
 
 (defn paxByMinute
-  [pax, disRate]
-  (if (>= pax disRate)
-    (into [disRate] (paxByMinute (- pax disRate) disRate))
-    (if (> 0 pax)
-      (into [] [pax]))))
+  ([pax disRate scheduled]
+   (paxByMinute pax disRate scheduled 0))
+
+  ([pax disRate scheduled minute]
+   (if (>= pax disRate)
+     (into {minute disRate} (paxByMinute (- pax disRate) disRate scheduled (+ minute 1)))
+     (if (> 0 pax)
+       '{(+ minute 1) pax}
+       (println "yeah")))))
+
+;; use reduce to create time in vector?
+
+(paxByMinute (flight :pax) paxDisRate (flight :scheduled))
+
+(count '(1 2))
 
 (def splitRatios [
                    {:paxType :eea-mr :queue :eea-desk :ratio 0.6}
@@ -62,8 +75,13 @@ myPaxLoads
 
 (defn paxload
   [paxLoads]
-  (wlplimpl paxLoads #(identity %)))
+  (wlplimpl paxLoads (fn [pt q p] p)))
 
 (paxload myPaxLoads)
 
 (workload myPaxLoads)
+
+(defn -main [] (
+                 print (paxload myPaxLoads)
+                 (f/show-formatters)
+                 ))
