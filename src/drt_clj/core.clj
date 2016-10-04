@@ -9,19 +9,6 @@
 
 (def paxDisRate 25)
 
-(defn paxMinutes
-  [pax rate]
-  (reverse (conj (repeat (int (/ pax rate)) rate) (mod pax rate))))
-
-(paxMinutes 99 25)
-
-;; use reduce to create time in vector?
-
-(paxByMinute (flight :pax) paxDisRate (flight :scheduled))
-
-(c/to-long (f/parse (flight :scheduled)))
-
-(count '(1 2))
 
 (def splitRatios [
                    {:paxType :eea-mr :queue :eea-desk :ratio 0.6}
@@ -36,34 +23,60 @@
     :visa {:non-eea-desk 0.5 :fast-track 0.25}
     :non-visa {:non-eea-desk 0.8 :fast-track 0.3}})
 
+;;;
+
+(defn pcpMinutes
+  [pax rate scheduled]
+
+    (def start (dateStrToLong scheduled))
+    (def nbMins (int (+ (Math/ceil (/ pax rate)))))
+    (range start (+ start (* nbMins 60000)) 60000)
+  )
+
+(defn paxMinutes
+  [pax rate]
+  (reverse (conj (repeat (int (/ pax rate)) rate) (mod pax rate))))
+
+(defn paxByMinute
+  [pax rate scheduled]
+  (zipmap (pcpMinutes pax rate scheduled) (paxMinutes pax rate)))
+
+;;;
+
+(paxByMinute (flight :pax) paxDisRate (flight :scheduled))
+
+(defn dateStrToLong
+  [scheduled]
+  (c/to-long (f/parse scheduled)))
+
 (defn paxProcTime
   [paxType queue]
   (get (get procTimes paxType) queue))
 
 (defn splitPax
   [pax-queue-splits pax-mins]
-  (map (fn [pax]
-         (into []
-               (map (fn [split]
-                      {:paxType (:paxType split) :queue (:queue split) :pax (* (:ratio split) pax)})
-                    pax-queue-splits)))
+  (map (fn [minute-pax]
+         {:minute (first minute-pax)
+          :load (map (fn [split]
+                       {:paxType (:paxType split) :queue (:queue split) :pax (* (:ratio split) (second minute-pax))})
+                    pax-queue-splits)})
        pax-mins))
 
-
-
-(def myPaxLoads (splitPax splitRatios (paxByMinute (flight :pax) paxDisRate)))
+(def myPaxLoads (splitPax splitRatios (paxByMinute (flight :pax) paxDisRate (flight :scheduled))))
 
 myPaxLoads
+
 
 (defn wlplimpl
   [paxLoads f]
   (map
-    (fn [splits]
-      (reduce
+    (fn [{minute :minute splits :load}]
+      {:minute minute
+       :loads (reduce
         (fn [a {paxType :paxType queue :queue pax :pax}]
           (assoc a queue (+ (or (get a queue) 0) (f paxType queue pax))))
         {}
-        splits))
+        splits)})
     paxLoads))
 
 (defn workload
@@ -78,6 +91,8 @@ myPaxLoads
 (paxload myPaxLoads)
 
 (workload myPaxLoads)
+
+(map (fn [{minute :minute}] (c/from-long minute)) (paxload myPaxLoads))
 
 (defn -main [] (
                  print (paxload myPaxLoads)
