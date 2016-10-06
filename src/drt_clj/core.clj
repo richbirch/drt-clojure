@@ -16,6 +16,10 @@
                    {:paxType :eea-nmr :queue :eea-desk :ratio 0.2}
                    ])
 
+(defn queueTypesFromSplitRatios
+  [sr]
+  (into #{} (map #(:queue %) sr)))
+
 (def procTimes
   {
     :eea-mr {:eea-desk 0.25 :e-gate 0.2}
@@ -62,39 +66,36 @@
                     pax-queue-splits)})
        pax-mins))
 
-(def myPaxLoads (splitPax splitRatios (paxByMinute (flight :pax) paxDisRate (flight :scheduled))))
+(def pax-type-queue-loads (splitPax splitRatios (paxByMinute (flight :pax) paxDisRate (flight :scheduled))))
 
-myPaxLoads
+pax-type-queue-loads
 
 
 (defn wlplimpl
   [paxLoads f]
-  (map
-    (fn [{minute :minute splits :load}]
-      {:minute minute
-       :loads (reduce
-        (fn [a {paxType :paxType queue :queue pax :pax}]
-          (assoc a queue (+ (or (get a queue) 0) (f paxType queue pax))))
-        {}
-        splits)})
-    paxLoads))
+  (into {}
+    (map
+      (fn [{minute :minute splits :load}]
+        [(keyword (str minute))
+         (reduce
+          (fn [a {paxType :paxType queue :queue pax :pax}]
+            (assoc a queue (+ (or (get a queue) 0) (f paxType queue pax))))
+          {}
+          splits)])
+      paxLoads)))
 
 (defn workload
   [paxLoads]
   (wlplimpl paxLoads #(* (paxProcTime %1 %2) %3)))
 
-
 (defn paxload
   [paxLoads]
   (wlplimpl paxLoads (fn [pt q p] p)))
 
-(def queue-paxloads myPaxLoads)
+(def queue-paxload (paxload pax-type-queue-loads))
+(def queue-workload (workload pax-type-queue-loads))
 
-({:1477898405000 {:eea-desk 7.5, :e-gate 1.0}} :1477898405000)
-
-(workload myPaxLoads)
-
-(map (fn [{minute :minute}] (c/from-long minute)) (paxload myPaxLoads))
+(map (fn [{minute :minute}] (c/from-long minute)) (paxload pax-type-queue-loads))
 
 (defn firstMinute
   [minute-loads]
@@ -102,17 +103,35 @@ myPaxLoads
 
 (defn minutesOfHours [hours start] (range start (+ start (* 60000 60 hours)) 60000))
 
-(minutesOfHours 24 (firstMinute queue-paxloads))
+(minutesOfHours 24 (firstMinute pax-type-queue-loads))
+
+(def emptyQueues
+  (reduce
+    (fn
+      [agg qt]
+      (assoc agg qt 0))
+    {}
+    (queueTypesFromSplitRatios splitRatios)))
+
+emptyQueues
+pax-type-queue-loads
+
+
+(reduce
+  (fn
+    [agg m]
+    (def min-key (keyword (str m)))
+    (assoc agg min-key (min-key queue-paxloads emptyQueues)))
+  {}
+  (minutesOfHours 24 (firstMinute pax-type-queue-loads)))
 
 (defn fillDay
-  [queue-paxloads]
-  (map (fn [m] (or (and (:minute m) (  :loads {:eea-desk (get queue-paxloads :minute
-
-(reduce (fn [a [m :minute]]))
+  [pax-type-queue-loads]
+  (map (fn [m] (or (and (:minute m) (  :loads {:eea-desk (get pax-type-queue-loads :minute)}))))))
 
 ;;
 
 (defn -main [] (
-                 print (paxload myPaxLoads)
+                 print (paxload pax-type-queue-loads)
                  (f/show-formatters)
                  ))
