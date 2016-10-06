@@ -88,11 +88,29 @@ myPaxLoads
   [paxLoads]
   (wlplimpl paxLoads (fn [pt q p] p)))
 
-(paxload myPaxLoads)
+(def queue-paxloads myPaxLoads)
+
+({:1477898405000 {:eea-desk 7.5, :e-gate 1.0}} :1477898405000)
 
 (workload myPaxLoads)
 
 (map (fn [{minute :minute}] (c/from-long minute)) (paxload myPaxLoads))
+
+(defn firstMinute
+  [minute-loads]
+  (apply min (map (fn [{minute :minute}] minute) minute-loads)))
+
+(defn minutesOfHours [hours start] (range start (+ start (* 60000 60 hours)) 60000))
+
+(minutesOfHours 24 (firstMinute queue-paxloads))
+
+(defn fillDay
+  [queue-paxloads]
+  (map (fn [m] (or (and (:minute m) (  :loads {:eea-desk (get queue-paxloads :minute
+
+(reduce (fn [a [m :minute]]))
+
+;;
 
 (defn -main [] (
                  print (paxload myPaxLoads)
